@@ -35,7 +35,7 @@ changelog:
       - "^test:"
 
 brews:
-  - name: flow-cli
+  - name: flowd-cli
     ids: [flow-cli]
     repository:
       owner: krishnakichuu

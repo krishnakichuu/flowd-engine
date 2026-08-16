@@ -316,6 +316,18 @@ fmt.Println(result) // "Hello, flowd!"
 
 ### The `flow-cli` Operator CLI
 
+Install via Homebrew (macOS/Linux):
+
+```bash
+brew tap krishnakichuu/flowd
+brew install flowd-cli
+```
+
+(The formula is named `flowd-cli`, not `flow-cli`, to avoid colliding with
+an unrelated formula already in homebrew-core — the installed binary is
+still `flow-cli`.) Or build it yourself with `make build` (see
+[Getting Started](#getting-started)).
+
 ```bash
 # Start a workflow by registered type name
 flow-cli start -id order-123 -type OrderWorkflow -task-queue orders -input '{"orderId":"123"}'
