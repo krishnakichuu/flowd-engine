@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package flow.api.v1;
+
+option go_package = "github.com/krishnakichuu/flowd/api/gen/flow/api/v1;flowv1";
+
+import "google/protobuf/duration.proto";
+
+// WorkflowExecution identifies a single run of a workflow_id. run_id is
+// assigned by the server at start time and changes on every new run of the
+// same workflow_id (including a future ContinueAsNew, which is out of scope
+// for Phase 1 but shapes this identifier now).
+message WorkflowExecution {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+// RetryPolicy configures server-side retry/backoff for an activity. Enforced
+// entirely in the history engine (see ADR-0002) so retries survive worker
+// crashes.
+message RetryPolicy {
+  google.protobuf.Duration initial_interval = 1;
+  double backoff_coefficient = 2;
+  google.protobuf.Duration max_interval = 3;
+  // 0 means unlimited attempts.
+  int32 max_attempts = 4;
+  repeated string non_retryable_error_types = 5;
+}
+
+// Payload is the wire envelope for all workflow/activity input and output.
+// The metadata map carries the encoding used for `data` (e.g. "encoding":
+// "json/plain") so a pluggable DataConverter can be introduced later without
+// a wire break. Phase 1 enforces a 2MB soft cap on `data` at the API layer.
+message Payload {
+  map<string, bytes> metadata = 1;
+  bytes data = 2;
+}
+
+// Failure carries error information for a failed activity or workflow task,
+// distinct from a successful Payload result.
+message Failure {
+  string message = 1;
+  string type = 2;
+  string stack_trace = 3;
+}

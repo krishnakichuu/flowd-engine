@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flowd
+      POSTGRES_PASSWORD: flowd
+      POSTGRES_DB: flowd
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowd -d flowd"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - flowd-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  flowd-postgres-data:

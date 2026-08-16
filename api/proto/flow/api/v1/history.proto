@@ -1,0 +1,223 @@
+syntax = "proto3";
+
+package flow.api.v1;
+
+option go_package = "github.com/krishnakichuu/flowd/api/gen/flow/api/v1;flowv1";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "flow/api/v1/common.proto";
+
+enum HistoryEventType {
+  HISTORY_EVENT_TYPE_UNSPECIFIED = 0;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_STARTED = 1;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED = 2;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_FAILED = 3;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_TERMINATED = 4;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED = 5;
+  HISTORY_EVENT_TYPE_WORKFLOW_TASK_SCHEDULED = 6;
+  HISTORY_EVENT_TYPE_WORKFLOW_TASK_STARTED = 7;
+  HISTORY_EVENT_TYPE_WORKFLOW_TASK_COMPLETED = 8;
+  HISTORY_EVENT_TYPE_WORKFLOW_TASK_FAILED = 9;
+  HISTORY_EVENT_TYPE_ACTIVITY_TASK_SCHEDULED = 10;
+  HISTORY_EVENT_TYPE_ACTIVITY_TASK_STARTED = 11;
+  HISTORY_EVENT_TYPE_ACTIVITY_TASK_COMPLETED = 12;
+  HISTORY_EVENT_TYPE_ACTIVITY_TASK_FAILED = 13;
+  HISTORY_EVENT_TYPE_TIMER_STARTED = 14;
+  HISTORY_EVENT_TYPE_TIMER_FIRED = 15;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_CONTINUED_AS_NEW = 16;
+  HISTORY_EVENT_TYPE_WORKFLOW_EXECUTION_CANCEL_REQUESTED = 17;
+}
+
+message WorkflowExecutionStartedEventAttributes {
+  string workflow_type = 1;
+  string task_queue = 2;
+  Payload input = 3;
+  RetryPolicy retry_policy = 4;
+  // continued_from_run_id is set only when this run was started by a
+  // ContinueAsNew command on a prior run of the same workflow_id; empty for
+  // a normal StartWorkflowExecution.
+  string continued_from_run_id = 5;
+}
+
+message WorkflowExecutionCompletedEventAttributes {
+  Payload result = 1;
+}
+
+message WorkflowExecutionFailedEventAttributes {
+  Failure failure = 1;
+}
+
+message WorkflowExecutionTerminatedEventAttributes {
+  string reason = 1;
+}
+
+message WorkflowExecutionSignaledEventAttributes {
+  string signal_name = 1;
+  Payload input = 2;
+}
+
+// WorkflowExecutionCancelRequestedEventAttributes records a client's
+// RequestCancelWorkflowExecution call (Phase 2 roadmap, Track B, item 3).
+// Unlike TerminateWorkflowExecution, this does not close the run itself —
+// it is a cooperative request, appended alongside a
+// WorkflowTaskScheduledEventAttributes exactly like a signal, so the
+// workflow wakes, observes it via workflow.IsCancelRequested, and decides
+// for itself how to end (run compensation then fail, or even complete
+// normally and ignore it).
+message WorkflowExecutionCancelRequestedEventAttributes {
+  string reason = 1;
+}
+
+message WorkflowTaskScheduledEventAttributes {
+  string task_queue = 1;
+}
+
+message WorkflowTaskStartedEventAttributes {
+  string identity = 1;
+}
+
+message WorkflowTaskCompletedEventAttributes {
+  string identity = 1;
+}
+
+message WorkflowTaskFailedEventAttributes {
+  Failure failure = 1;
+}
+
+message ActivityTaskScheduledEventAttributes {
+  int64 activity_id = 1;
+  string activity_type = 2;
+  Payload input = 3;
+  RetryPolicy retry_policy = 4;
+  google.protobuf.Duration schedule_to_start_timeout = 5;
+  google.protobuf.Duration start_to_close_timeout = 6;
+}
+
+message ActivityTaskStartedEventAttributes {
+  int64 activity_id = 1;
+  int32 attempt = 2;
+}
+
+message ActivityTaskCompletedEventAttributes {
+  int64 activity_id = 1;
+  Payload result = 2;
+}
+
+message ActivityTaskFailedEventAttributes {
+  int64 activity_id = 1;
+  Failure failure = 2;
+  // Total attempts made before this terminal failure. Per-attempt failures
+  // are not individually recorded in history (see ADR-0002); this is the
+  // only place attempt count is captured in the replayable history.
+  int32 attempt = 3;
+}
+
+message TimerStartedEventAttributes {
+  int64 timer_id = 1;
+  google.protobuf.Duration duration = 2;
+}
+
+message TimerFiredEventAttributes {
+  int64 timer_id = 1;
+}
+
+// WorkflowExecutionContinuedAsNewEventAttributes is the terminal event on a
+// run that closed via a ContinueAsNewWorkflowExecutionCommand: it records
+// what the new run was started with, the same way
+// WorkflowExecutionCompletedEventAttributes records a normal completion's
+// result. new_run_id is what a caller resolves to when it wants the
+// execution's current run (see DescribeWorkflowExecution with an empty
+// run_id): the schema's current_executions row is atomically repointed to
+// it in the same transaction that appends this event.
+message WorkflowExecutionContinuedAsNewEventAttributes {
+  string new_run_id = 1;
+  string workflow_type = 2;
+  string task_queue = 3;
+  Payload input = 4;
+}
+
+// HistoryEvent is one entry in a workflow run's immutable, ordered event
+// history. event_time is server-assigned and is the sole source of truth for
+// workflow.Now() during replay — never wall-clock (see ADR-0001).
+message HistoryEvent {
+  int64 event_id = 1;
+  google.protobuf.Timestamp event_time = 2;
+  HistoryEventType event_type = 3;
+
+  oneof attributes {
+    WorkflowExecutionStartedEventAttributes workflow_execution_started_event_attributes = 10;
+    WorkflowExecutionCompletedEventAttributes workflow_execution_completed_event_attributes = 11;
+    WorkflowExecutionFailedEventAttributes workflow_execution_failed_event_attributes = 12;
+    WorkflowExecutionTerminatedEventAttributes workflow_execution_terminated_event_attributes = 13;
+    WorkflowExecutionSignaledEventAttributes workflow_execution_signaled_event_attributes = 14;
+    WorkflowTaskScheduledEventAttributes workflow_task_scheduled_event_attributes = 15;
+    WorkflowTaskStartedEventAttributes workflow_task_started_event_attributes = 16;
+    WorkflowTaskCompletedEventAttributes workflow_task_completed_event_attributes = 17;
+    WorkflowTaskFailedEventAttributes workflow_task_failed_event_attributes = 18;
+    ActivityTaskScheduledEventAttributes activity_task_scheduled_event_attributes = 19;
+    ActivityTaskStartedEventAttributes activity_task_started_event_attributes = 20;
+    ActivityTaskCompletedEventAttributes activity_task_completed_event_attributes = 21;
+    ActivityTaskFailedEventAttributes activity_task_failed_event_attributes = 22;
+    TimerStartedEventAttributes timer_started_event_attributes = 23;
+    TimerFiredEventAttributes timer_fired_event_attributes = 24;
+    WorkflowExecutionContinuedAsNewEventAttributes workflow_execution_continued_as_new_event_attributes = 25;
+    WorkflowExecutionCancelRequestedEventAttributes workflow_execution_cancel_requested_event_attributes = 26;
+  }
+}
+
+// Command is emitted by a worker in RespondWorkflowTaskCompleted. Each
+// command becomes one new HistoryEvent. Graceful cancellation (Phase 2
+// roadmap, Track B, item 3) does not need a variant here: like a signal,
+// it is a client-initiated, out-of-band write
+// (RequestCancelWorkflowExecution → WorkflowExecutionCancelRequestedEvent),
+// never something a worker itself emits as a command.
+message Command {
+  oneof command {
+    ScheduleActivityTaskCommand schedule_activity_task = 1;
+    StartTimerCommand start_timer = 2;
+    CompleteWorkflowExecutionCommand complete_workflow_execution = 3;
+    FailWorkflowExecutionCommand fail_workflow_execution = 4;
+    ContinueAsNewWorkflowExecutionCommand continue_as_new_workflow_execution = 5;
+  }
+}
+
+message ScheduleActivityTaskCommand {
+  int64 activity_id = 1;
+  string activity_type = 2;
+  Payload input = 3;
+  RetryPolicy retry_policy = 4;
+  google.protobuf.Duration schedule_to_start_timeout = 5;
+  google.protobuf.Duration start_to_close_timeout = 6;
+}
+
+message StartTimerCommand {
+  int64 timer_id = 1;
+  google.protobuf.Duration duration = 2;
+}
+
+message CompleteWorkflowExecutionCommand {
+  Payload result = 1;
+}
+
+message FailWorkflowExecutionCommand {
+  Failure failure = 1;
+}
+
+// ContinueAsNewWorkflowExecutionCommand closes the current run and
+// atomically starts a fresh run under the same workflow_id, so a workflow
+// that legitimately loops forever can reset its history instead of growing
+// it without bound (see docs/adr/ADR-0001's replay-cost tradeoff). Unset
+// fields fall back to the current run's own values: an empty workflow_type
+// or task_queue continues on the same type/queue, and nil timeouts continue
+// with the current run's. workflow_execution_timeout is deliberately not
+// present here — Phase 1 treats it as spanning the whole continue-as-new
+// chain, carried forward unconditionally from the original run.
+message ContinueAsNewWorkflowExecutionCommand {
+  string workflow_type = 1;
+  string task_queue = 2;
+  Payload input = 3;
+  RetryPolicy retry_policy = 4;
+  google.protobuf.Duration workflow_run_timeout = 5;
+  google.protobuf.Duration workflow_task_timeout = 6;
+}

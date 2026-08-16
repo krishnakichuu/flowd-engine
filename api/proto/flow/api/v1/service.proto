@@ -1,0 +1,334 @@
+syntax = "proto3";
+
+package flow.api.v1;
+
+option go_package = "github.com/krishnakichuu/flowd/api/gen/flow/api/v1;flowv1";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "flow/api/v1/common.proto";
+import "flow/api/v1/history.proto";
+
+enum WorkflowExecutionStatus {
+  WORKFLOW_EXECUTION_STATUS_UNSPECIFIED = 0;
+  WORKFLOW_EXECUTION_STATUS_RUNNING = 1;
+  WORKFLOW_EXECUTION_STATUS_COMPLETED = 2;
+  WORKFLOW_EXECUTION_STATUS_FAILED = 3;
+  WORKFLOW_EXECUTION_STATUS_TERMINATED = 4;
+  WORKFLOW_EXECUTION_STATUS_TIMED_OUT = 5;
+  WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW = 6;
+}
+
+// WorkflowService is the single external, cross-language contract for flowd.
+// Both workflow-authoring clients/SDKs and worker poll/respond loops talk
+// exclusively to this service, even though the server internally separates
+// frontend/matching/history concerns (see ADR-0001, ADR-0002). This is the
+// integration point future non-Go SDKs generate against.
+service WorkflowService {
+  // Client-facing RPCs.
+  rpc StartWorkflowExecution(StartWorkflowExecutionRequest) returns (StartWorkflowExecutionResponse);
+  rpc SignalWorkflowExecution(SignalWorkflowExecutionRequest) returns (SignalWorkflowExecutionResponse);
+  // RequestCancelWorkflowExecution asks a running workflow to wind down
+  // gracefully — unlike TerminateWorkflowExecution, this does not close
+  // the run: it appends a cancel-requested event and wakes the workflow,
+  // the same "out-of-band write, then a normal workflow task" shape as
+  // SignalWorkflowExecution, so workflow code can observe it
+  // (workflow.IsCancelRequested) and run compensation before deciding how
+  // to end.
+  rpc RequestCancelWorkflowExecution(RequestCancelWorkflowExecutionRequest) returns (RequestCancelWorkflowExecutionResponse);
+  rpc GetWorkflowExecutionHistory(GetWorkflowExecutionHistoryRequest) returns (GetWorkflowExecutionHistoryResponse);
+  rpc DescribeWorkflowExecution(DescribeWorkflowExecutionRequest) returns (DescribeWorkflowExecutionResponse);
+  rpc TerminateWorkflowExecution(TerminateWorkflowExecutionRequest) returns (TerminateWorkflowExecutionResponse);
+  // ListWorkflowExecutions is the operator/UI-facing "what's out there"
+  // primitive — flow-cli and the web UI (internal/webapi) both use this to
+  // discover workflow IDs rather than requiring the caller to already know
+  // one, unlike every other workflow RPC above.
+  rpc ListWorkflowExecutions(ListWorkflowExecutionsRequest) returns (ListWorkflowExecutionsResponse);
+
+  // Worker-facing poll/respond RPCs.
+  rpc PollWorkflowTaskQueue(PollWorkflowTaskQueueRequest) returns (PollWorkflowTaskQueueResponse);
+  rpc RespondWorkflowTaskCompleted(RespondWorkflowTaskCompletedRequest) returns (RespondWorkflowTaskCompletedResponse);
+  rpc RespondWorkflowTaskFailed(RespondWorkflowTaskFailedRequest) returns (RespondWorkflowTaskFailedResponse);
+  rpc PollActivityTaskQueue(PollActivityTaskQueueRequest) returns (PollActivityTaskQueueResponse);
+  rpc RespondActivityTaskCompleted(RespondActivityTaskCompletedRequest) returns (RespondActivityTaskCompletedResponse);
+  rpc RespondActivityTaskFailed(RespondActivityTaskFailedRequest) returns (RespondActivityTaskFailedResponse);
+  rpc RespondQueryTaskCompleted(RespondQueryTaskCompletedRequest) returns (RespondQueryTaskCompletedResponse);
+
+  // QueryWorkflowExecution is synchronous and read-only: it never appends
+  // to history (see query_tasks in the schema, distinct from
+  // workflow_tasks/activity_tasks). The server enqueues a query task on the
+  // run's task queue and blocks until a worker answers it via
+  // RespondQueryTaskCompleted or the deadline passes — a worker answers by
+  // invoking a handler the workflow registered with
+  // sdk/workflow.SetQueryHandler against its current in-memory state,
+  // rebuilding that state via replay first if it isn't already cached.
+  rpc QueryWorkflowExecution(QueryWorkflowExecutionRequest) returns (QueryWorkflowExecutionResponse);
+
+  // Namespace management. Unlike every other RPC, these don't act within a
+  // namespace, so they aren't subject to a caller's namespace scope (see
+  // internal/frontend's auth interceptor) — only a valid API key, if one is
+  // configured at all.
+  rpc CreateNamespace(CreateNamespaceRequest) returns (CreateNamespaceResponse);
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
+}
+
+message StartWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  string workflow_type = 3;
+  string task_queue = 4;
+  Payload input = 5;
+  google.protobuf.Duration workflow_execution_timeout = 6;
+  google.protobuf.Duration workflow_run_timeout = 7;
+  google.protobuf.Duration workflow_task_timeout = 8;
+  RetryPolicy retry_policy = 9;
+  // request_id is the idempotency key: a repeated StartWorkflowExecution with
+  // the same (namespace, workflow_id, request_id) returns the existing run
+  // rather than erroring or starting a duplicate (see current_executions in
+  // ADR-0002 / the Postgres schema).
+  string request_id = 10;
+  string identity = 11;
+}
+
+message StartWorkflowExecutionResponse {
+  string run_id = 1;
+}
+
+message SignalWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  // run_id empty means "the current/latest run".
+  string run_id = 3;
+  string signal_name = 4;
+  Payload input = 5;
+  string request_id = 6;
+  string identity = 7;
+}
+
+message SignalWorkflowExecutionResponse {}
+
+message RequestCancelWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  // run_id empty means "the current/latest run".
+  string run_id = 3;
+  string reason = 4;
+  string request_id = 5;
+  string identity = 6;
+}
+
+message RequestCancelWorkflowExecutionResponse {}
+
+message GetWorkflowExecutionHistoryRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  string run_id = 3;
+  int32 page_size = 4;
+  bytes next_page_token = 5;
+}
+
+message GetWorkflowExecutionHistoryResponse {
+  repeated HistoryEvent events = 1;
+  bytes next_page_token = 2;
+}
+
+message DescribeWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  string run_id = 3;
+}
+
+message DescribeWorkflowExecutionResponse {
+  WorkflowExecution execution = 1;
+  string workflow_type = 2;
+  string task_queue = 3;
+  WorkflowExecutionStatus status = 4;
+}
+
+message TerminateWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  string run_id = 3;
+  string reason = 4;
+  string identity = 5;
+}
+
+message TerminateWorkflowExecutionResponse {}
+
+// WorkflowExecutionInfo is one row of a ListWorkflowExecutions result —
+// enough to render a list view without a separate DescribeWorkflowExecution
+// call per row.
+message WorkflowExecutionInfo {
+  WorkflowExecution execution = 1;
+  string workflow_type = 2;
+  string task_queue = 3;
+  WorkflowExecutionStatus status = 4;
+  google.protobuf.Timestamp start_time = 5;
+  // close_time is unset for a still-RUNNING execution.
+  google.protobuf.Timestamp close_time = 6;
+}
+
+message ListWorkflowExecutionsRequest {
+  string namespace = 1;
+  // status_filter, if set to anything other than UNSPECIFIED, restricts
+  // results to that status. UNSPECIFIED (the default) returns every status.
+  WorkflowExecutionStatus status_filter = 2;
+  // task_queue, if non-empty, restricts results to that task queue.
+  string task_queue = 3;
+  int32 page_size = 4;
+  bytes next_page_token = 5;
+}
+
+message ListWorkflowExecutionsResponse {
+  repeated WorkflowExecutionInfo executions = 1;
+  bytes next_page_token = 2;
+}
+
+message PollWorkflowTaskQueueRequest {
+  string namespace = 1;
+  string task_queue = 2;
+  string identity = 3;
+  // task_queue_partitions restricts this poll to the listed partitions —
+  // empty means every partition, the default and Phase 1's original
+  // behavior (Phase 2 roadmap, Track C, item 3). Meaningless unless the
+  // server is configured with more than one partition
+  // (FLOWD_NUM_TASK_QUEUE_PARTITIONS); every task lives in partition 0
+  // otherwise.
+  repeated int32 task_queue_partitions = 4;
+}
+
+// QueryTask carries a pending query alongside the same task_token/history a
+// normal workflow task would — see PollWorkflowTaskQueueResponse.query_task.
+message QueryTask {
+  string query_type = 1;
+  Payload query_args = 2;
+}
+
+message PollWorkflowTaskQueueResponse {
+  // Opaque, versioned task token. Not cryptographically signed in Phase 1 —
+  // the DB-side lease check (task_row_id + lease_token) is what enforces
+  // ownership — but opaque so signing can be added later without a wire
+  // break (see ADR-0002).
+  bytes task_token = 1;
+  WorkflowExecution workflow_execution = 2;
+  string workflow_type = 3;
+  repeated HistoryEvent history = 4;
+  int64 previous_started_event_id = 5;
+  // query_task, when set, means this dispatch is a query, not a real
+  // workflow task: task_token/workflow_execution/workflow_type/history are
+  // still populated (a worker needs them to rebuild — or reuse its cached
+  // — in-memory state), but previous_started_event_id doesn't apply, and
+  // responding goes through RespondQueryTaskCompleted, not
+  // RespondWorkflowTaskCompleted. Queries take dispatch priority over
+  // normal workflow tasks on the same queue: the client on the other end
+  // of QueryWorkflowExecution is synchronously blocked waiting.
+  QueryTask query_task = 6;
+}
+
+// StickyExecutionAttributes, attached to a RespondWorkflowTaskCompleted
+// call, asks the server to prefer routing this run's next workflow task
+// back to worker_identity for up to schedule_to_start_timeout, so that
+// worker can resume its cached in-memory Execution instead of replaying
+// this run's full history from event 1 (Phase 2 roadmap, Track C, item 1).
+// Omitting this (or worker_identity == "") clears any existing preference
+// — the next task is dispatched to whichever worker is available, which
+// always falls back to a full replay.
+message StickyExecutionAttributes {
+  string worker_identity = 1;
+  google.protobuf.Duration schedule_to_start_timeout = 2;
+}
+
+message RespondWorkflowTaskCompletedRequest {
+  bytes task_token = 1;
+  repeated Command commands = 2;
+  string identity = 3;
+  StickyExecutionAttributes sticky_execution_attributes = 4;
+}
+
+message RespondWorkflowTaskCompletedResponse {}
+
+message RespondWorkflowTaskFailedRequest {
+  bytes task_token = 1;
+  Failure failure = 2;
+  string identity = 3;
+}
+
+message RespondWorkflowTaskFailedResponse {}
+
+message PollActivityTaskQueueRequest {
+  string namespace = 1;
+  string task_queue = 2;
+  string identity = 3;
+  // See PollWorkflowTaskQueueRequest.task_queue_partitions.
+  repeated int32 task_queue_partitions = 4;
+}
+
+message PollActivityTaskQueueResponse {
+  bytes task_token = 1;
+  WorkflowExecution workflow_execution = 2;
+  int64 activity_id = 3;
+  string activity_type = 4;
+  Payload input = 5;
+  int32 current_attempt = 6;
+  google.protobuf.Duration start_to_close_timeout = 7;
+}
+
+message RespondActivityTaskCompletedRequest {
+  bytes task_token = 1;
+  Payload result = 2;
+  string identity = 3;
+}
+
+message RespondActivityTaskCompletedResponse {}
+
+message RespondActivityTaskFailedRequest {
+  bytes task_token = 1;
+  Failure failure = 2;
+  string identity = 3;
+}
+
+message RespondActivityTaskFailedResponse {}
+
+message RespondQueryTaskCompletedRequest {
+  bytes task_token = 1;
+  // Exactly one of result/failure should be set, mirroring the
+  // Respond*TaskCompleted/Failed split everywhere else — folded into one
+  // RPC here since a query response is always exactly one round trip, not
+  // a retryable sequence of commands.
+  Payload result = 2;
+  Failure failure = 3;
+}
+
+message RespondQueryTaskCompletedResponse {}
+
+message QueryWorkflowExecutionRequest {
+  string namespace = 1;
+  string workflow_id = 2;
+  // run_id empty means "the current/latest run".
+  string run_id = 3;
+  string query_type = 4;
+  Payload query_args = 5;
+}
+
+message QueryWorkflowExecutionResponse {
+  Payload result = 1;
+}
+
+message NamespaceInfo {
+  string name = 1;
+  google.protobuf.Timestamp created_at = 2;
+}
+
+message CreateNamespaceRequest {
+  string name = 1;
+}
+
+message CreateNamespaceResponse {
+  NamespaceInfo namespace = 1;
+}
+
+message ListNamespacesRequest {}
+
+message ListNamespacesResponse {
+  repeated NamespaceInfo namespaces = 1;
+}

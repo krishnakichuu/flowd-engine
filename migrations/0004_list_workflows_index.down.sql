@@ -1,0 +1,1 @@
+DROP INDEX idx_workflow_executions_by_start_time;
