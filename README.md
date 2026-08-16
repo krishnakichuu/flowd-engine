@@ -17,6 +17,7 @@ API, an operator CLI, and a read-only web dashboard.
 - [Architecture](#architecture)
 - [Project Layout](#project-layout)
 - [Getting Started](#getting-started)
+- [Installing `flow-cli`](#installing-flow-cli)
 - [Configuration](#configuration)
 - [Usage](#usage)
   - [Writing a Workflow](#writing-a-workflow)
@@ -212,6 +213,70 @@ The starter prints the workflow/run ID, waits for completion, and prints the
 result (`Hello, flowd!`) — durably executed, retried and recoverable if the
 worker crashes mid-run.
 
+## Installing `flow-cli`
+
+`flow-cli` is the operator CLI for starting, signaling, cancelling, and
+inspecting workflows against a running `flowd` server. It's distributed
+independently of the server binary, via three methods:
+
+### Homebrew (macOS/Linux) — recommended
+
+```bash
+brew tap krishnakichuu/flowd
+brew install flowd-cli
+```
+
+> The formula is named `flowd-cli`, not `flow-cli`, to avoid colliding with
+> an unrelated, pre-existing `flow-cli` formula in homebrew-core — the
+> installed binary itself is still called `flow-cli`.
+
+Verify the install:
+
+```bash
+flow-cli version
+```
+
+Upgrade to a newer release:
+
+```bash
+brew upgrade flowd-cli
+```
+
+### Download a prebuilt binary
+
+Every tagged release publishes `flow-cli` binaries for `darwin`/`linux` ×
+`amd64`/`arm64`, plus a `checksums.txt`, on the
+[Releases page](https://github.com/krishnakichuu/flowd-engine/releases).
+
+```bash
+# example: macOS on Apple Silicon
+curl -sLO https://github.com/krishnakichuu/flowd-engine/releases/latest/download/flow-cli_<version>_darwin_arm64.tar.gz
+curl -sLO https://github.com/krishnakichuu/flowd-engine/releases/latest/download/checksums.txt
+
+# verify the checksum before running anything you downloaded
+grep flow-cli_<version>_darwin_arm64.tar.gz checksums.txt | shasum -a 256 -c -
+
+tar xzf flow-cli_<version>_darwin_arm64.tar.gz
+sudo mv flow-cli /usr/local/bin/
+flow-cli version
+```
+
+Substitute `linux_amd64` / `linux_arm64` for the Linux equivalents.
+
+### Build from source
+
+Requires Go 1.25+:
+
+```bash
+git clone https://github.com/krishnakichuu/flowd-engine.git
+cd flowd-engine
+make build
+./bin/flow-cli version
+```
+
+`make build` produces `flow-cli` alongside the `flowd` server binary in
+`bin/`; move or symlink it onto your `PATH` as needed.
+
 ## Configuration
 
 `flowd` is configured entirely through environment variables (see
@@ -316,17 +381,7 @@ fmt.Println(result) // "Hello, flowd!"
 
 ### The `flow-cli` Operator CLI
 
-Install via Homebrew (macOS/Linux):
-
-```bash
-brew tap krishnakichuu/flowd
-brew install flowd-cli
-```
-
-(The formula is named `flowd-cli`, not `flow-cli`, to avoid colliding with
-an unrelated formula already in homebrew-core — the installed binary is
-still `flow-cli`.) Or build it yourself with `make build` (see
-[Getting Started](#getting-started)).
+See [Installing `flow-cli`](#installing-flow-cli) for setup. Once installed:
 
 ```bash
 # Start a workflow by registered type name
