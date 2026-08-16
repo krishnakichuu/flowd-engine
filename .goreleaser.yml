@@ -2,10 +2,6 @@ version: 2
 
 project_name: flow-cli
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: flow-cli
     main: ./cmd/flow-cli
