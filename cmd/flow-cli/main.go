@@ -16,10 +16,19 @@ import (
 	"github.com/krishnakichuu/flowd/sdk/client"
 )
 
+// version is set at build time via -ldflags "-X main.version=...", e.g. by
+// .goreleaser.yml. Left as "dev" for local/non-release builds.
+var version = "dev"
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
+	}
+
+	if os.Args[1] == "version" || os.Args[1] == "-version" || os.Args[1] == "--version" {
+		fmt.Println(version)
+		return
 	}
 
 	target := os.Getenv("FLOWD_ADDR")
@@ -59,7 +68,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: flow-cli <start|list|signal|cancel|describe|history|query|namespace-create|namespace-list> [flags]
+	fmt.Fprintln(os.Stderr, `usage: flow-cli <start|list|signal|cancel|describe|history|query|namespace-create|namespace-list|version> [flags]
 
 Set FLOWD_ADDR to target a non-default server (default localhost:7233).
 Set FLOWD_API_KEY to authenticate against a server with FLOWD_API_KEYS configured.

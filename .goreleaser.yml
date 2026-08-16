@@ -1,0 +1,59 @@
+version: 2
+
+project_name: flow-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: flow-cli
+    main: ./cmd/flow-cli
+    binary: flow-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: flow-cli
+    ids: [flow-cli]
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - name: flow-cli
+    ids: [flow-cli]
+    repository:
+      owner: krishnakichuu
+      name: homebrew-flowd
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/krishnakichuu/flowd-engine"
+    description: "Operator CLI for flowd, a durable workflow orchestration engine"
+    license: "MIT"
+    commit_author:
+      name: krishna kumar
+      email: krishnashaajith@gmail.com
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/flow-cli version")
+    install: |
+      bin.install "flow-cli"
