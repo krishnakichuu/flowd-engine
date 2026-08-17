@@ -1,0 +1,7 @@
+.git/
+bin/
+dist/
+web/node_modules/
+web/dist/
+*.log
+.DS_Store

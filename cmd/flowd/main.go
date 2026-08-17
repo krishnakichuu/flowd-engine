@@ -39,7 +39,15 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// version is set via -ldflags "-X main.version=..." at build time (see
+// .goreleaser.yml and Dockerfile); left as "dev" for local builds.
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "-version" || os.Args[1] == "--version") {
+		fmt.Println(version)
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "flowd:", err)
 		os.Exit(1)
@@ -153,7 +161,7 @@ func run() error {
 		grpcSrv.GracefulStop()
 	}()
 
-	logger.Info("flowd listening", "addr", cfg.GRPCAddr)
+	logger.Info("flowd listening", "addr", cfg.GRPCAddr, "version", version)
 	if err := grpcSrv.Serve(lis); err != nil {
 		return fmt.Errorf("grpc serve: %w", err)
 	}

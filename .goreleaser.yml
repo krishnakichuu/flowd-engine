@@ -16,6 +16,19 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}}
+  - id: flowd
+    main: ./cmd/flowd
+    binary: flowd
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
 
 archives:
   - id: flow-cli
@@ -23,6 +36,53 @@ archives:
     formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+  - id: flowd
+    ids: [flowd]
+    formats: [tar.gz]
+    name_template: >-
+      flowd_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+dockers:
+  - id: flowd-amd64
+    ids: [flowd]
+    goos: linux
+    goarch: amd64
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --build-arg=VERSION={{.Version}}
+      - --label=org.opencontainers.image.title={{.ProjectName}}
+      - --label=org.opencontainers.image.version={{.Version}}
+      - --label=org.opencontainers.image.source={{.GitURL}}
+      - --label=org.opencontainers.image.licenses=MIT
+    image_templates:
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-amd64"
+  - id: flowd-arm64
+    ids: [flowd]
+    goos: linux
+    goarch: arm64
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --build-arg=VERSION={{.Version}}
+      - --label=org.opencontainers.image.title={{.ProjectName}}
+      - --label=org.opencontainers.image.version={{.Version}}
+      - --label=org.opencontainers.image.source={{.GitURL}}
+      - --label=org.opencontainers.image.licenses=MIT
+    image_templates:
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-arm64"
+
+docker_manifests:
+  - name_template: "ghcr.io/krishnakichuu/flowd:{{.Version}}"
+    image_templates:
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-amd64"
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-arm64"
+  - name_template: "ghcr.io/krishnakichuu/flowd:latest"
+    image_templates:
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-amd64"
+      - "ghcr.io/krishnakichuu/flowd:{{.Version}}-arm64"
 
 checksum:
   name_template: "checksums.txt"

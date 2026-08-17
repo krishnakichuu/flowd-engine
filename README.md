@@ -200,6 +200,20 @@ is required. By default it listens on:
 | `7234` | Web dashboard + read-only JSON API          |
 | `9090` | Prometheus metrics (`/metrics`, `/healthz`) |
 
+**Alternative: Docker.** `flowd` is a single self-contained binary — the web
+dashboard and SQL migrations are compiled in — so the published image needs
+nothing mounted:
+
+```bash
+docker run -p 7233:7233 -p 7234:7234 -p 9090:9090 \
+  -e FLOWD_DATABASE_DSN=postgres://flowd:flowd@host.docker.internal:5432/flowd?sslmode=disable \
+  ghcr.io/krishnakichuu/flowd:latest
+```
+
+Prebuilt `flowd` binaries (same platforms as `flow-cli`) are also attached
+to every [GitHub Release](https://github.com/krishnakichuu/flowd-engine/releases)
+if you'd rather run it without Docker or building from source.
+
 ### 3. Run the example end to end
 
 In separate terminals:
