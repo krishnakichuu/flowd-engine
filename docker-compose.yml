@@ -15,5 +15,31 @@ services:
     volumes:
       - flowd-postgres-data:/var/lib/postgresql/data
 
+  # Builds from the local Dockerfile rather than pulling ghcr.io/krishnakichuu/flowd
+  # so this works even before the release pipeline is publishing images reliably.
+  # Once ghcr.io publishing is fixed, swap `build: .` for a pinned
+  # `image: ghcr.io/krishnakichuu/flowd:<version>` so every developer runs the
+  # identical build instead of whatever's on their local working tree.
+  flowd:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # postgres, not host.docker.internal — both containers share this
+      # compose network, so the service name resolves directly and there's
+      # no manual DSN string to type (or fight zsh's `?` globbing over).
+      FLOWD_DATABASE_DSN: postgres://flowd:flowd@postgres:5432/flowd?sslmode=disable
+    ports:
+      - "7233:7233" # gRPC API (SDK, flow-cli)
+      - "7234:7234" # web dashboard
+      - "9090:9090" # Prometheus metrics + /healthz
+    # No container healthcheck here: the runtime image is
+    # gcr.io/distroless/static-debian12 — no shell, no wget/curl, nothing
+    # but the /flowd binary itself, so there's no CMD available to probe
+    # /healthz from inside the container. `depends_on: service_healthy`
+    # above (on postgres) is what actually gates startup ordering here;
+    # check readiness from the host instead: curl localhost:9090/healthz.
+
 volumes:
   flowd-postgres-data:

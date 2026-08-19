@@ -168,13 +168,44 @@ web/            Web dashboard frontend source (built into internal/webui/dist)
 
 ## Getting Started
 
-### Prerequisites
+### Fastest path: Docker Compose, zero local dependencies
+
+If you just want a running `flowd` server — no Go toolchain, no separately
+installed Postgres, nothing to configure — this is the one command that
+does it all:
+
+```bash
+git clone https://github.com/krishnakichuu/flowd-engine.git
+cd flowd-engine
+docker compose up
+```
+
+This builds `flowd` from source *inside* Docker (via the repo's own
+`Dockerfile`) and starts it alongside a Postgres instance on the same
+internal network — the only thing you need installed is Docker itself.
+Once it's up:
+
+| Port   | Purpose                                    |
+|--------|---------------------------------------------|
+| `7233` | gRPC API (SDK, `flow-cli`)                  |
+| `7234` | Web dashboard + read-only JSON API          |
+| `9090` | Prometheus metrics (`/metrics`, `/healthz`) |
+
+`Ctrl-C` (or `docker compose down`) stops everything; your workflow history
+persists in the `flowd-postgres-data` volume across restarts. This is the
+recommended way to try FlowD or run it in local development — the steps
+below are for contributing to `flowd` itself, where you need the Go
+toolchain regardless.
+
+### Developing on flowd itself
+
+#### Prerequisites
 
 - Go 1.25+
 - Docker (for the bundled Postgres via `docker compose`), or your own
   Postgres 16+ instance
 
-### 1. Start Postgres
+#### 1. Start Postgres
 
 ```bash
 make compose-up
@@ -184,7 +215,7 @@ This starts a local Postgres instance on `localhost:5432` (see
 `docker-compose.yml`). If you're using your own Postgres instance, just make
 sure `FLOWD_DATABASE_DSN` points at it (see [Configuration](#configuration)).
 
-### 2. Run the server
+#### 2. Run the server
 
 ```bash
 make build
@@ -200,21 +231,25 @@ is required. By default it listens on:
 | `7234` | Web dashboard + read-only JSON API          |
 | `9090` | Prometheus metrics (`/metrics`, `/healthz`) |
 
-**Alternative: Docker.** `flowd` is a single self-contained binary — the web
-dashboard and SQL migrations are compiled in — so the published image needs
-nothing mounted:
+**Prefer Docker?** See [Fastest path: Docker Compose](#fastest-path-docker-compose-zero-local-dependencies)
+above — `docker compose up` builds and runs `flowd` with Postgres in one
+step. If you want the published image directly against your own Postgres
+instead:
 
 ```bash
 docker run -p 7233:7233 -p 7234:7234 -p 9090:9090 \
-  -e FLOWD_DATABASE_DSN=postgres://flowd:flowd@host.docker.internal:5432/flowd?sslmode=disable \
+  -e "FLOWD_DATABASE_DSN=postgres://flowd:flowd@host.docker.internal:5432/flowd?sslmode=disable" \
   ghcr.io/krishnakichuu/flowd:latest
 ```
+
+(note the quotes around the `-e` value — the DSN's `?` is a glob character
+in zsh and will fail to parse without them)
 
 Prebuilt `flowd` binaries (same platforms as `flow-cli`) are also attached
 to every [GitHub Release](https://github.com/krishnakichuu/flowd-engine/releases)
 if you'd rather run it without Docker or building from source.
 
-### 3. Run the example end to end
+#### 3. Run the example end to end
 
 In separate terminals:
 

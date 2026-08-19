@@ -1,0 +1,10 @@
+# Used only by GoReleaser's `dockers:` step (see .goreleaser.yml), whose
+# build context is a synthetic temp directory containing just this file and
+# the already-built `flowd` binary — not the repo. The full source-build
+# Dockerfile at the repo root is for `docker build .` / `docker compose up`,
+# where the build context is the whole repo instead.
+FROM gcr.io/distroless/static-debian12
+COPY flowd /flowd
+USER nonroot:nonroot
+EXPOSE 7233 7234 9090
+ENTRYPOINT ["/flowd"]
